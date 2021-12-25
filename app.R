@@ -1,7 +1,6 @@
 ## app.R ##
 # shiny dashboard version
-# shiny dashboard version
-# v02-drc, uses memoise, plotting is now the slowest part
+
 library(shiny)
 library(shinydashboard)
 library(tidyverse)
@@ -10,12 +9,10 @@ library(data.table)
 #library(modelr)
 #library(broom)
 library(DT)
-library(drc)
+library(tidydrc)
 library(memoise)
-#library(tidydrc)
-source("R/do_drm.R")
 
-
+functionsList <- c("L.4", "LL.4", "LL.5")
 #
 # ui ******
 
@@ -45,8 +42,13 @@ source("R/do_drm.R")
             tags$hr(),
             
             radioButtons("timeUnits", "Select time unit", 
-                         c("Hours" = "h", "Minutes" = "min", "Seconds" = "sec"), selected = "h")
+                         c("Hours" = "h", "Minutes" = "min", "Seconds" = "sec"), selected = "h"), 
+            tags$hr(),
+            selectizeInput("sampleData", "Sample data", 
+                           choices = list("no sampling" = 0, "1/5" = 4, "1/10" = 9, "1/100" = 99), selected = 0, multiple = FALSE)
             ),
+          
+          
           box(width = 9, status = "primary", DT::dataTableOutput("data"))
           )
         ),
@@ -56,22 +58,30 @@ source("R/do_drm.R")
                 box(width = 12, 
                   h5("Plots of original data, the points used in the model are in blue, model fit is a red line. Change time slider to re-calculate."),
                     column(6, selectizeInput("selectedSamples", 
-                                             "Select which samples to analyse", choices = c("A"), multiple = TRUE)),
-                    column(4, selectizeInput("theme", "Plot theme", 
+                                             "Select which samples to analyse", choices = c("A"), 
+                                             multiple = TRUE)
+                           ),
+                    column(2, selectizeInput("model", "Select model to use", choices = functionsList, 
+                                             selected = "L.4", 
+                                             multiple = FALSE) 
+                           ),
+                    column(2, selectizeInput("theme", "Plot theme", 
                                            choices = c("blackwhite", 
                                                        "minimal",
                                                        "pubclean",
                                                        "pubr"),
                                            selected = "blackwhite",
-                                           multiple = F)),
+                                           multiple = F)
+                           ),
                     
-                    column(2, selectizeInput("facetCols", "Number of plot columns", choices = c(1:24), selected =4))
+                    column(2, selectizeInput("facetCols", "Number of plot columns", choices = c(1:24), selected =4)
+                           )
                     
                     ),
                 
                 box(width = 12, title = "Model plot", status = "primary",
                     
-                    plotOutput("model", height = "400px")),
+                    plotOutput("model", height = "350px")),
                 column(4, sliderInput("trim", label = h5("Trim time"), min=0, max=150, value=c(0,40))),
                 column(4, sliderInput("pointsalpha", label = h5("Adjust point opacity"), min = 0, max = 1, value = 0.3)),
                 column(1, checkboxInput("confidence", label = "Show confidence interval", value = FALSE)),
@@ -113,7 +123,8 @@ server <- function(input, output, session) {
     validate(
       need(expr = !is.null(input$file1), "Please select file first")
     )
-    fread(inFile$datapath, header = TRUE)
+    df <- fread(inFile$datapath, header = TRUE)
+    return(sample_frac( df, 1/(as.numeric(input$sampleData) + 1)) )
   })
 
 # selectize initialisation and updates
@@ -122,12 +133,18 @@ server <- function(input, output, session) {
     sampleslist <- colnames(df()) 
     updateSelectizeInput(session, "selectedSamples", 
                          choices = sampleslist[2:length(sampleslist)],       #excluding time, which is the first element
-                         selected = sampleslist[2:3],                         
+                         selected = sampleslist[2],                         
                          server = TRUE) 
-    updateSliderInput(session, "trim", max = max(df()$time), value = c(0, max(df()$time)))
+    updateSliderInput(session, "trim", max = max(df()$time), value = c(0, max(df()$time))
+                      )
     
   })
-    
+  
+  observe({
+  samples_react <- reactiveValues(allsamples = colnames(df())[-1], modelledsamples = input$selectedSamples)
+  print(input$sampleData)
+  })
+  
 #******************************************    
 ## model df, fits model after filtering by time
     
@@ -136,7 +153,8 @@ server <- function(input, output, session) {
                (input$selectedSamples, "Select samples first.. ")   
       )
       df() %>% 
-        dplyr::select(time, one_of(input$selectedSamples)) %>% # here actual filtering on selectedSamples , notice one_of!       
+        
+        dplyr::select(time, all_of(input$selectedSamples)) %>% # here actual filtering on selectedSamples , notice one_of!       
         rename(t = time) %>%
         gather(sample, n, -t)
       
@@ -147,20 +165,24 @@ server <- function(input, output, session) {
     # does not work
     # then try dflong as argument? works!
     df1 <- memoise(function(x, trim1 = input$trim[1], trim2 = input$trim[2]){
+    if(input$model %in% functionsList ) {
+    # security feature
      x %>%
         filter(between(t, trim1, trim2)) %>%
-        do_drm(t, n, sample)
+        tidydrc::tidydrc_model(dose = t, response = n, model = L.4(), sample)
+      }
           # get statistics with lapply on the drm output, e.g lapply(drmout$models, summary)
     })
 
     
     
-    observe({print(df1(dflong()))})
+    #observe({print(df1(dflong()))})
     
     
     modelplot <- function() {
-      predictions <- df1(dflong()) %>% unnest(pred)
-      data <- df1(dflong()) %>% unnest(data)
+      model <- df1( dflong() )
+      predictions <- model %>% unnest(pred)
+      data <- model %>% unnest(data)
       
      p <- dflong() %>%
       ggplot() + 
@@ -181,7 +203,7 @@ server <- function(input, output, session) {
       
      if(input$confidence) { p <-
        p + geom_ribbon(
-         aes(dose, ymin = predmin, ymax = predmax),
+         aes(dose, ymin = Lower, ymax = Upper),
          alpha = 0.3,
          fill = "#F5B7B1",
          data = predictions
@@ -250,20 +272,20 @@ server <- function(input, output, session) {
      dtt <- reactive({
        df1(dflong()) %>% 
        unnest(coefs) %>% 
-       dplyr::filter(param == "Slope:(Intercept)") %>%
-       dplyr::mutate(Estimate = abs(Estimate),
-                     dt = log(2)/Estimate,
-                     dtsterr = exp(Estimate + `Std. Error`) - exp(Estimate))
+       dplyr::filter(parameter == "b:(Intercept)") %>%
+       dplyr::mutate(value = abs(value),
+                     dt = log(2)/value)
+                     #dtsterr = exp(Estimate + `Std. Error`) - exp(Estimate))
      })
     
     output$summaryTable <- DT::renderDataTable({
       dtt() %>%
              
               dplyr::select(Sample = sample, 
-                            "Growth rate constant" = Estimate, 
-                            "Growth rate std. error" = `Std. Error`,
-                            "Doubling time" = dt,
-                            "Doubling time std. error" = dtsterr) %>%
+                            "Growth rate constant" = value, 
+                            #"Growth rate std. error" = `Std. Error`,
+                            "Doubling time" = dt) %>%
+                            #"Doubling time std. error" = dtsterr) %>%
       
       
      
@@ -276,7 +298,7 @@ server <- function(input, output, session) {
                 options = list(dom = 'Brltip', 
                                buttons = c("copy", "csv", "print"))
                 ) %>%
-    formatRound(2:5, 3) %>%
+    formatRound(2:3, 3) %>%
     formatStyle(1, fontWeight = "bold") %>%
     formatStyle(1, backgroundColor = "steelblue", color = "white")
         })
@@ -290,7 +312,7 @@ server <- function(input, output, session) {
     
      output$successSamplesBox <- renderValueBox({
       
-      ifelse (ncol(df()) >= 2, successSample <- nrow(df1(dflong())), successSample <- 0)
+      ifelse (ncol(df()) >= 2, successSample <- length(input$selectedSamples), successSample <- 0)
       ifelse(successSample == 0, color2 <- "red", #yes
                                   ifelse(successSample < ncol(df())-1, color2 <- "yellow", color2 <- "green")
         )
