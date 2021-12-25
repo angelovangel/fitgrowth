@@ -78,7 +78,7 @@ functionsList <- c("L.3", "L.4", "L.5")
                                            multiple = F)
                            ),
                     
-                    column(2, selectizeInput("facetCols", "Number of plot columns", choices = c(1:24), selected =4)
+                    column(2, selectizeInput("facetCols", "Number of plot columns", choices = c(1:12), selected =4)
                            )
                     
                     ),
@@ -87,8 +87,9 @@ functionsList <- c("L.3", "L.4", "L.5")
                     
                     plotOutput("model", height = "350px")),
                 column(4, sliderInput("trim", label = h5("Trim time"), min=0, max=150, value=c(0,40))),
-                column(4, sliderInput("pointsalpha", label = h5("Adjust point opacity"), min = 0, max = 1, value = 0.3)),
+                column(3, sliderInput("pointsalpha", label = h5("Adjust point opacity"), min = 0, max = 1, value = 0.3)),
                 column(1, checkboxInput("confidence", label = "Show confidence interval", value = FALSE)),
+                column(1, checkboxInput("ED50", label = "Show ED50", value = FALSE)),
                 column(1, checkboxInput("doublingtime", label = "Show doubling time", value = FALSE)),
                 column(2, downloadButton('downloadModelPlot', 'Download Plot (pdf)'))
                     
@@ -213,16 +214,25 @@ server <- function(input, output, session) {
          data = predictions
        )
      }
+     
+     if(input$ED50) { p <-
+       p + 
+       geom_vline(aes_(xintercept = ~ ED50), linetype = 5, alpha = 0.5, data = dtt() 
+                      ) + 
+       geom_text(aes(x = ED50, y = -Inf, label = paste0(round(ED50, 2), " ", input$timeUnits)), 
+                 hjust = -0.1, 
+                 vjust = -0.5,
+                 size = 2.5, 
+                 color = "steelblue",
+                 data = dtt() )
+     }
+     
      if(input$doublingtime) { p <- 
        p + geom_text(
-         aes(
-           x = Inf,
-           y = -Inf,
-           label = paste0(round(dt, 3), " ", input$timeUnits)
-         ),
+         aes(x = Inf, y = -Inf, label = paste0(round(dt, 2), " ", input$timeUnits)),
          hjust = 1.1,
          vjust = -0.5,
-         size = 3,
+         size = 2.5,
          color = "steelblue",
          data = dtt()
        )
@@ -294,14 +304,14 @@ server <- function(input, output, session) {
                     "ED50" = ED50) %>%
                     
       datatable( 
-                caption = paste0("L4 parameters, the time range used in the model is between ", input$trim[1], " and ", input$trim[2], " ", input$timeUnits),
+                caption = paste0(input$model, " parameters, the time range used in the model is between ", input$trim[1], " and ", input$trim[2], " ", input$timeUnits),
                 rownames = FALSE, 
                 extensions = 'Buttons', 
                 options = list(dom = 'Brltip', 
                                buttons = c("copy", "csv", "print"))
                 ) %>%
-    formatRound(2:4, 3) %>%
-    formatStyle(1, fontWeight = "bold") %>%
+    formatRound(2:5, 3) %>%
+    formatStyle(2:5, fontWeight = "bold") %>%
     formatStyle(1, backgroundColor = "steelblue", color = "white")
         })
    
@@ -326,7 +336,7 @@ server <- function(input, output, session) {
      output$downloadModelPlot <- downloadHandler(
        filename = "modelPlot.pdf",
        content = function(file) {
-          ggsave(file, plot = modelplot(), device = "pdf", width = 11, height = 8, units = "in")
+          ggsave(file, plot = modelplot(), device = "pdf", width = 8, height = 8, units = "in")
              })    
      
      
