@@ -42,10 +42,8 @@ functionsList <- c("L.4", "LL.4", "LL.5")
             tags$hr(),
             
             radioButtons("timeUnits", "Select time unit", 
-                         c("Hours" = "h", "Minutes" = "min", "Seconds" = "sec"), selected = "h"), 
-            tags$hr(),
-            selectizeInput("sampleData", "Sample data", 
-                           choices = list("no sampling" = 0, "1/5" = 4, "1/10" = 9, "1/100" = 99), selected = 0, multiple = FALSE)
+                         c("Hours" = "h", "Minutes" = "min", "Seconds" = "sec"), selected = "h")
+            
             ),
           
           
@@ -57,10 +55,14 @@ functionsList <- c("L.4", "LL.4", "LL.5")
               fluidRow(
                 box(width = 12, 
                   h5("Plots of original data, the points used in the model are in blue, model fit is a red line. Change time slider to re-calculate."),
-                    column(6, selectizeInput("selectedSamples", 
+                    column(4, selectizeInput("selectedSamples", 
                                              "Select which samples to analyse", choices = c("A"), 
                                              multiple = TRUE)
                            ),
+                  column(2, selectizeInput("sampleData", "Sample data", 
+                                           choices = list("no sampling" = 0, "1/5" = 4, "1/10" = 9, "1/100" = 99), selected = 0, multiple = FALSE)
+                         ),
+              
                     column(2, selectizeInput("model", "Select model to use", choices = functionsList, 
                                              selected = "L.4", 
                                              multiple = FALSE) 
@@ -142,7 +144,7 @@ server <- function(input, output, session) {
   
   observe({
   samples_react <- reactiveValues(allsamples = colnames(df())[-1], modelledsamples = input$selectedSamples)
-  print(input$sampleData)
+  print(input$model)
   })
   
 #******************************************    
@@ -164,12 +166,12 @@ server <- function(input, output, session) {
     # try memoise? to avoid fitting repeatedly
     # does not work
     # then try dflong as argument? works!
-    df1 <- memoise(function(x, trim1 = input$trim[1], trim2 = input$trim[2]){
+    df1 <- memoise(function(x, model = input$model, trim1 = input$trim[1], trim2 = input$trim[2]){
     if(input$model %in% functionsList ) {
     # security feature
-     x %>%
+      x %>%
         filter(between(t, trim1, trim2)) %>%
-        tidydrc::tidydrc_model(dose = t, response = n, model = L.4(), sample)
+        tidydrc::tidydrc_model(dose = t, response = n, model = get(model)(), sample) # crazy stuff going on here
       }
           # get statistics with lapply on the drm output, e.g lapply(drmout$models, summary)
     })
