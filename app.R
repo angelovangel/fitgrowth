@@ -3,7 +3,9 @@
 
 library(shiny)
 library(shinydashboard)
-library(tidyverse)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
 library(ggpubr)
 library(data.table)
 #library(modelr)
@@ -12,7 +14,7 @@ library(DT)
 library(tidydrc)
 library(memoise)
 
-functionsList <- c("L.4", "LL.4", "LL.5")
+functionsList <- c("L.3", "L.4", "L.5")
 #
 # ui ******
 
@@ -237,9 +239,18 @@ server <- function(input, output, session) {
     }
     
     
-#### up to here drm ok
 
-#** outputs
+    dtt <- reactive({
+      df1(dflong()) %>% 
+        unnest(coefs) %>% 
+        pivot_wider(names_from = parameter, values_from = value) %>% 
+        mutate(growth_rate = abs(`b:(Intercept)`), # b is slope
+               ED50 = abs(`e:(Intercept)`), # e is ED50
+               dt = log(2)/growth_rate, 
+               K = abs(`d:(Intercept)`)) # d is carrying capacity
+        
+      #dtsterr = exp(Estimate + `Std. Error`) - exp(Estimate))
+    })
   
       
     sampledf <- reactive({
@@ -249,6 +260,7 @@ server <- function(input, output, session) {
       summarise(NAs = sum(is.na(od)), measurements = n() - NAs)
   })
     
+## outputs ##
     output$data <- DT::renderDataTable({
       datatable(sampledf(), 
         rownames = FALSE, 
@@ -271,28 +283,16 @@ server <- function(input, output, session) {
     
     #if (ncol(df) <= 4) plotHeight2 = 200 else (plotHeight2 = ncol(df) * 25) #vary plot height according to number of samples
      
-     dtt <- reactive({
-       df1(dflong()) %>% 
-       unnest(coefs) %>% 
-       dplyr::filter(parameter == "b:(Intercept)") %>%
-       dplyr::mutate(value = abs(value),
-                     dt = log(2)/value)
-                     #dtsterr = exp(Estimate + `Std. Error`) - exp(Estimate))
-     })
     
     output$summaryTable <- DT::renderDataTable({
       dtt() %>%
-             
-              dplyr::select(Sample = sample, 
-                            "Growth rate constant" = value, 
-                            #"Growth rate std. error" = `Std. Error`,
-                            "Doubling time" = dt) %>%
-                            #"Doubling time std. error" = dtsterr) %>%
-      
-      
-     
-      
-        
+      dplyr::select(Sample = sample, 
+                    "Growth rate constant" = growth_rate, 
+                    #"Growth rate std. error" = `Std. Error`,
+                    "Doubling time" = dt, 
+                    "Carrying capacity" = K, 
+                    "ED50" = ED50) %>%
+                    
       datatable( 
                 caption = paste0("L4 parameters, the time range used in the model is between ", input$trim[1], " and ", input$trim[2], " ", input$timeUnits),
                 rownames = FALSE, 
@@ -300,7 +300,7 @@ server <- function(input, output, session) {
                 options = list(dom = 'Brltip', 
                                buttons = c("copy", "csv", "print"))
                 ) %>%
-    formatRound(2:3, 3) %>%
+    formatRound(2:4, 3) %>%
     formatStyle(1, fontWeight = "bold") %>%
     formatStyle(1, backgroundColor = "steelblue", color = "white")
         })
