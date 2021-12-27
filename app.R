@@ -191,12 +191,12 @@ server <- function(input, output, session) {
       
      p <- dflong() %>%
       ggplot() + 
-      geom_point(aes(t, n), alpha = input$pointsalpha, size = 1) +
+      geom_point(aes(t, n), alpha = input$pointsalpha, size = 2, stroke = 0) +
        # main pred line
       geom_line(aes(dose, pred), color = "red", linetype = 4, 
                 data = predictions) +
       
-      geom_point(aes(t, n), alpha = input$pointsalpha, color = "steelblue", size = 1,
+      geom_point(aes(t, n), alpha = input$pointsalpha, color = "steelblue", size = 2, stroke = 0,
                  data = data) +
       # geom_vline(aes(xintercept = input$trim[1]), linetype = 5, size = 0.2) +
       # geom_vline(aes(xintercept = input$trim[2]), linetype = 5, size = 0.2) +
