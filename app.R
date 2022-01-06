@@ -26,6 +26,7 @@ functionsList <- c("L.3", "L.4", "L.5")
       menuItem("Model", tabName = "model", icon = icon("rocket")),
       
       menuItem("Summary table", tabName = "summaryTable", icon = icon("table")),
+      hr(),
       fluidRow(valueBoxOutput("numSamplesBox", width = 12), (valueBoxOutput("successSamplesBox", width = 12))),
       hr(),
       
@@ -37,7 +38,9 @@ functionsList <- c("L.3", "L.4", "L.5")
     tabItems(
       tabItem(tabName = "data",
         fluidRow(
-          box(width = 12, h5("Load the data as a text file, the first column must be named time, all other columns are treated as samples.")),
+          box(width = 12, 
+              "Load the data as a text file (tsv, csv,...) , the first column must be named", tags$b("time"), "and all other columns are treated as samples. Example data can be downloaded", tags$a(href = "https://github.com/angelovangel/fitgrowth/tree/main/testdata", target = "_blank", "here")
+              ),
           box(width = 3,
             title = "Read file", status = "primary",
             fileInput('file1', 'Choose file'),
@@ -352,15 +355,16 @@ server <- function(input, output, session) {
     The best parameters are found using the <code>drc</code> library in <code>R</code>. More specifically, 
     the four-parameter logistic function is used (<code>L.4</code> in <code>drc</code>). 
     The app handles one or many samples (tested with 96), as well as
-    <code>NA</code> values. You can get an example file <a href=https://www.dropbox.com/sh/zzf7y3ijwkat55e/AABUvp7BAARIdYBqZWgk1E37a?dl=0>here</a>.</p> Instructions: 
+    <code>NA</code> values. You can get an example file <a href= https://github.com/angelovangel/fitgrowth/tree/main/testdata target=_blank >here</a>.</p> Instructions: 
     load the data as a text file, the first column <u>must</u> be named <b>time</b>, all other columns are treated as
     samples. After uploading the file, go to the <b>Model</b> tab to select which samples to analyse.
     Note that the parameters of the model are re-calculated when the time interval is changed with the slider."))
         })
   output$about <- renderUI({
-    HTML(paste("2018 Angel Angelov <p>aangeloo@gmail.com</p>
+    HTML(paste("Angel Angelov <p>aangeloo@gmail.com</p>
+               
                <p> Built in <code>R</code> using the libraries <code>shiny</code>, <code>drc</code> and <code>tidyverse</code>. 
-               The source code is available from GitHub <a href = https://github.com/angelovangel/FitGrowth>here</a>.</p>"))
+               The source code is available from GitHub <a href = https://github.com/angelovangel/fitgrowth>here</a>.</p>"))
         })
 }
 
